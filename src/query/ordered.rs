@@ -119,7 +119,7 @@ pub trait OrderedStatement {
     ///
     /// assert_eq!(
     ///     query.to_string(PostgresQueryBuilder),
-    ///     r#"SELECT "aspect" FROM "glyph" ORDER BY "image" DESC NULLS LAST, "glyph"."aspect" ASC NULLS FISRT"#
+    ///     r#"SELECT "aspect" FROM "glyph" ORDER BY "image" DESC NULLS LAST, "glyph"."aspect" ASC NULLS FIRST"#
     /// );
     /// ```
     fn order_by_with_nulls<T>(&mut self, col: T, order: Order, nulls: Nulls) -> &mut Self
