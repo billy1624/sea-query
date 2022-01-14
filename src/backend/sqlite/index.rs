@@ -9,8 +9,6 @@ impl IndexBuilder for SqliteQueryBuilder {
 
         self.prepare_index_prefix(create, sql);
 
-        // self.prepare_index_type(&create.index_type, sql);
-
         self.prepare_index_columns(&create.index.columns, sql);
     }
 
@@ -25,8 +23,6 @@ impl IndexBuilder for SqliteQueryBuilder {
         if let Some(table) = &create.table {
             table.prepare(sql, self.quote());
         }
-
-        // self.prepare_index_type(&create.index_type, sql);
 
         self.prepare_index_columns(&create.index.columns, sql);
     }
