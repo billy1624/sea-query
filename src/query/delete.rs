@@ -4,7 +4,8 @@ use crate::{
     query::{condition::*, OrderedStatement},
     types::*,
     value::*,
-    Query, QueryStatementBuilder, SelectExpr, SelectStatement,
+    Query, QueryStatementBuilder, QueryStatementBuilderGenerics, SelectExpr, SelectStatement,
+    WithClause, WithQuery,
 };
 
 /// Delete existing rows from the table
@@ -174,9 +175,30 @@ impl DeleteStatement {
     {
         self.returning(Query::select().column(col.into_iden()).take())
     }
+
+    /// Create a [WithQuery] by specifying a [WithClause] to execute this query with.
+    pub fn with(self, clause: WithClause) -> WithQuery {
+        clause.query(self)
+    }
 }
 
 impl QueryStatementBuilder for DeleteStatement {
+    fn build_collect_any(
+        &self,
+        query_builder: &dyn QueryBuilder,
+        collector: &mut dyn FnMut(Value),
+    ) -> String {
+        let mut sql = SqlWriter::new();
+        query_builder.prepare_delete_statement(self, &mut sql, collector);
+        sql.result()
+    }
+
+    fn box_clone(&self) -> Box<dyn QueryStatementBuilder> {
+        Box::new(self.clone())
+    }
+}
+
+impl QueryStatementBuilderGenerics for DeleteStatement {
     /// Build corresponding SQL statement for certain database backend and collect query parameters
     ///
     /// # Examples
@@ -206,16 +228,6 @@ impl QueryStatementBuilder for DeleteStatement {
     fn build_collect<T: QueryBuilder>(
         &self,
         query_builder: T,
-        collector: &mut dyn FnMut(Value),
-    ) -> String {
-        let mut sql = SqlWriter::new();
-        query_builder.prepare_delete_statement(self, &mut sql, collector);
-        sql.result()
-    }
-
-    fn build_collect_any(
-        &self,
-        query_builder: &dyn QueryBuilder,
         collector: &mut dyn FnMut(Value),
     ) -> String {
         let mut sql = SqlWriter::new();

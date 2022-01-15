@@ -1,6 +1,7 @@
 use crate::{
     backend::QueryBuilder, error::*, prepare::*, types::*, value::*, Expr, Query,
-    QueryStatementBuilder, SelectExpr, SelectStatement, SimpleExpr,
+    QueryStatementBuilder, QueryStatementBuilderGenerics, SelectExpr, SelectStatement, SimpleExpr,
+    WithClause, WithQuery,
 };
 
 /// Insert any new rows into an existing table
@@ -255,9 +256,30 @@ impl InsertStatement {
     {
         self.returning(Query::select().column(col.into_iden()).take())
     }
+
+    /// Create a [WithQuery] by specifying a [WithClause] to execute this query with.
+    pub fn with(self, clause: WithClause) -> WithQuery {
+        clause.query(self)
+    }
 }
 
 impl QueryStatementBuilder for InsertStatement {
+    fn build_collect_any(
+        &self,
+        query_builder: &dyn QueryBuilder,
+        collector: &mut dyn FnMut(Value),
+    ) -> String {
+        let mut sql = SqlWriter::new();
+        query_builder.prepare_insert_statement(self, &mut sql, collector);
+        sql.result()
+    }
+
+    fn box_clone(&self) -> Box<dyn QueryStatementBuilder> {
+        Box::new(self.clone())
+    }
+}
+
+impl QueryStatementBuilderGenerics for InsertStatement {
     /// Build corresponding SQL statement for certain database backend and collect query parameters
     ///
     /// # Examples
@@ -294,16 +316,6 @@ impl QueryStatementBuilder for InsertStatement {
     fn build_collect<T: QueryBuilder>(
         &self,
         query_builder: T,
-        collector: &mut dyn FnMut(Value),
-    ) -> String {
-        let mut sql = SqlWriter::new();
-        query_builder.prepare_insert_statement(self, &mut sql, collector);
-        sql.result()
-    }
-
-    fn build_collect_any(
-        &self,
-        query_builder: &dyn QueryBuilder,
         collector: &mut dyn FnMut(Value),
     ) -> String {
         let mut sql = SqlWriter::new();
