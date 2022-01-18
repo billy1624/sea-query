@@ -16,164 +16,21 @@ async fn main() {
         .unwrap();
     let mut pool = connection.try_acquire().unwrap();
 
-    // Schema
+    let mut stmt = Query::update();
 
-    let sql = Table::create()
-        .table(Character::Table)
-        .if_not_exists()
-        .col(
-            ColumnDef::new(Character::Id)
-                .integer()
-                .not_null()
-                .auto_increment()
-                .primary_key(),
-        )
-        .col(ColumnDef::new(Character::Uuid).uuid())
-        .col(ColumnDef::new(Character::FontSize).integer())
-        .col(ColumnDef::new(Character::Character).string())
-        .col(ColumnDef::new(Character::Meta).json())
-        .col(ColumnDef::new(Character::Decimal).decimal())
-        .col(ColumnDef::new(Character::BigDecimal).decimal())
-        .col(ColumnDef::new(Character::Created).date_time())
-        .build(PostgresQueryBuilder);
+    stmt.table(Character::Table);
 
-    let result = sqlx::query(&sql).execute(&mut pool).await;
-    println!("Create table character: {:?}\n", result);
-
-    // Create
-
-    let (sql, values) = Query::insert()
-        .into_table(Character::Table)
-        .columns(vec![
-            Character::Uuid,
-            Character::FontSize,
-            Character::Character,
-            Character::Meta,
-            Character::Decimal,
-            Character::BigDecimal,
-            Character::Created,
-        ])
-        .values_panic(vec![
-            Uuid::new_v4().into(),
-            12.into(),
-            "A".into(),
-            json!({
-                "notes": "some notes here",
-            })
-            .into(),
-            Decimal::from_i128_with_scale(3141i128, 3).into(),
-            BigDecimal::from_i128(3141i128)
-                .unwrap()
-                .with_scale(3)
-                .into(),
-            NaiveDate::from_ymd(2020, 8, 20).and_hms(0, 0, 0).into(),
-        ])
-        .returning_col(Character::Id)
-        .build(PostgresQueryBuilder);
-
-    let row = bind_query(sqlx::query(&sql), &values)
-        .fetch_one(&mut pool)
-        .await
-        .unwrap();
-    let id: i32 = row.try_get(0).unwrap();
-    println!("Insert into character: last_insert_id = {}\n", id);
-
-    // Read
-
-    let (sql, values) = Query::select()
-        .columns(vec![
-            Character::Id,
-            Character::Uuid,
-            Character::Character,
-            Character::FontSize,
-            Character::Meta,
-            Character::Decimal,
-            Character::BigDecimal,
-            Character::Created,
-        ])
-        .from(Character::Table)
-        .order_by(Character::Id, Order::Desc)
-        .limit(1)
-        .build(PostgresQueryBuilder);
-
-    let rows = bind_query_as(sqlx::query_as::<_, CharacterStruct>(&sql), &values)
-        .fetch_all(&mut pool)
-        .await
-        .unwrap();
-    println!("Select one from character:");
-    for row in rows.iter() {
-        println!("{:?}", row);
+    let val = Some(vec![(Character::FontSize, 24i32.into())]);
+    if let Some(v) = val {
+        stmt.values(v);
     }
-    println!();
+    stmt.and_where(Expr::col(Character::Id).eq(1));
 
-    // Update
-
-    let (sql, values) = Query::update()
-        .table(Character::Table)
-        .values(vec![(Character::FontSize, 24.into())])
-        .and_where(Expr::col(Character::Id).eq(id))
-        .build(PostgresQueryBuilder);
+    let (sql, values) = stmt.build(PostgresQueryBuilder);
 
     let result = bind_query(sqlx::query(&sql), &values)
         .execute(&mut pool)
         .await;
-    println!("Update character: {:?}\n", result);
-
-    // Read
-
-    let (sql, values) = Query::select()
-        .columns(vec![
-            Character::Id,
-            Character::Uuid,
-            Character::Character,
-            Character::FontSize,
-            Character::Meta,
-            Character::Decimal,
-            Character::BigDecimal,
-            Character::Created,
-        ])
-        .from(Character::Table)
-        .order_by(Character::Id, Order::Desc)
-        .limit(1)
-        .build(PostgresQueryBuilder);
-
-    let rows = bind_query_as(sqlx::query_as::<_, CharacterStruct>(&sql), &values)
-        .fetch_all(&mut pool)
-        .await
-        .unwrap();
-    println!("Select one from character:");
-    for row in rows.iter() {
-        println!("{:?}", row);
-    }
-    println!();
-
-    // Count
-
-    let (sql, values) = Query::select()
-        .from(Character::Table)
-        .expr(Func::count(Expr::col(Character::Id)))
-        .build(PostgresQueryBuilder);
-
-    let row = bind_query(sqlx::query(&sql), &values)
-        .fetch_one(&mut pool)
-        .await
-        .unwrap();
-    print!("Count character: ");
-    let count: i64 = row.try_get(0).unwrap();
-    println!("{}", count);
-    println!();
-
-    // Delete
-
-    let (sql, values) = Query::delete()
-        .from_table(Character::Table)
-        .and_where(Expr::col(Character::Id).eq(id))
-        .build(PostgresQueryBuilder);
-
-    let result = bind_query(sqlx::query(&sql), &values)
-        .execute(&mut pool)
-        .await;
-    println!("Delete character: {:?}", result);
 }
 
 #[derive(Iden)]
@@ -187,16 +44,4 @@ enum Character {
     Decimal,
     BigDecimal,
     Created,
-}
-
-#[derive(sqlx::FromRow, Debug)]
-struct CharacterStruct {
-    id: i32,
-    uuid: Uuid,
-    character: String,
-    font_size: i32,
-    meta: Json,
-    decimal: Decimal,
-    big_decimal: BigDecimal,
-    created: NaiveDateTime,
 }
