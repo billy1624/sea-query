@@ -4,6 +4,16 @@ use crate::{
     WithClause, WithQuery,
 };
 
+/// Represents a value source that can be used in an insert query.
+///
+/// [`InsertValueSource`] is a node in the expression tree and can represent a raw value set
+/// ('VALUES') or a select query.
+#[derive(Debug, Clone)]
+enum InsertValueSource {
+    Values(Vec<Vec<SimpleExpr>>),
+    Select(Box<SelectStatement>),
+}
+
 /// Insert any new rows into an existing table
 ///
 /// # Examples
@@ -35,7 +45,7 @@ use crate::{
 pub struct InsertStatement {
     pub(crate) table: Option<Box<TableRef>>,
     pub(crate) columns: Vec<DynIden>,
-    pub(crate) values: Vec<Vec<SimpleExpr>>,
+    pub(crate) source: Option<InsertValueSource>,
     pub(crate) returning: Vec<SelectExpr>,
 }
 
@@ -115,8 +125,117 @@ impl InsertStatement {
                 val_len: values.len(),
             });
         }
-        self.values.push(values);
+
+        let values_source = if let Some(InsertValueSource::Values(values)) = &mut self.source {
+            values
+        } else {
+            self.source = Some(InsertValueSource::Values(Default::default()));
+            if let Some(InsertValueSource::Values(values)) = &mut self.source {
+                values
+            } else {
+                unreachable!();
+            }
+        };
+        values_source.push(values);
         Ok(self)
+    }
+
+    /// Specify a select query whose values to be inserted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sea_query::{tests_cfg::*, *};
+    ///
+    /// let query = Query::insert()
+    ///     .into_table(Glyph::Table)
+    ///     .columns(vec![Glyph::Aspect, Glyph::Image])
+    ///     .select_from(Query::select()
+    ///         .column(Glyph::Aspect)
+    ///         .column(Glyph::Image)
+    ///         .from(Glyph::Table)
+    ///         .and_where(Expr::col(Glyph::Image).like("0%"))
+    ///         .to_owned()
+    ///     )
+    ///     .unwrap()
+    ///     .to_owned();
+    ///
+    /// assert_eq!(
+    ///     query.to_string(MysqlQueryBuilder),
+    ///     r#"INSERT INTO `glyph` (`aspect`, `image`) SELECT `aspect`, `image` FROM `glyph` WHERE `image` LIKE '0%'"#
+    /// );
+    /// assert_eq!(
+    ///     query.to_string(PostgresQueryBuilder),
+    ///     r#"INSERT INTO "glyph" ("aspect", "image") SELECT "aspect", "image" FROM "glyph" WHERE "image" LIKE '0%'"#
+    /// );
+    /// assert_eq!(
+    ///     query.to_string(SqliteQueryBuilder),
+    ///     r#"INSERT INTO "glyph" ("aspect", "image") SELECT "aspect", "image" FROM "glyph" WHERE "image" LIKE '0%'"#
+    /// );
+    /// ```
+    pub fn select_from<S>(&mut self, select: S) -> Result<&mut Self>
+    where
+        S: Into<SelectStatement>,
+    {
+        let statement = select.into();
+
+        if self.columns.len() != statement.selects.len() {
+            return Err(Error::ColValNumMismatch {
+                col_len: self.columns.len(),
+                val_len: statement.selects.len(),
+            });
+        }
+
+        self.source = Some(InsertValueSource::Select(Box::new(statement)));
+        Ok(self)
+    }
+
+    /// Specify the value source of the insert.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sea_query::{tests_cfg::*, *};
+    ///
+    /// let query = Query::insert()
+    ///     .into_table(Glyph::Table)
+    ///     .columns(vec![Glyph::Aspect, Glyph::Image])
+    ///     .value_source(InsertValueSource::Select(Box::new(Query::select()
+    ///         .column(Glyph::Aspect)
+    ///         .column(Glyph::Image)
+    ///         .from(Glyph::Table)
+    ///         .and_where(Expr::col(Glyph::Image).like("0%"))
+    ///         .to_owned()))
+    ///     )
+    ///     .unwrap()
+    ///     .to_owned();
+    ///
+    /// assert_eq!(
+    ///     query.to_string(MysqlQueryBuilder),
+    ///     r#"INSERT INTO `glyph` (`aspect`, `image`) SELECT `aspect`, `image` FROM `glyph` WHERE `image` LIKE '0%'"#
+    /// );
+    /// assert_eq!(
+    ///     query.to_string(PostgresQueryBuilder),
+    ///     r#"INSERT INTO "glyph" ("aspect", "image") SELECT "aspect", "image" FROM "glyph" WHERE "image" LIKE '0%'"#
+    /// );
+    /// assert_eq!(
+    ///     query.to_string(SqliteQueryBuilder),
+    ///     r#"INSERT INTO "glyph" ("aspect", "image") SELECT "aspect", "image" FROM "glyph" WHERE "image" LIKE '0%'"#
+    /// );
+    /// ```
+    fn value_source<S>(&mut self, source: S) -> Result<&mut InsertStatement>
+    where
+        S: Into<InsertValueSource>,
+    {
+        match source.into() {
+            InsertValueSource::Values(values) => {
+                for value in values {
+                    self.exprs(value)?;
+                }
+                Ok(self)
+            }
+            InsertValueSource::Select(select) => self.select_from(*select),
+        }
     }
 
     /// Specify a row of values to be inserted.
@@ -160,7 +279,17 @@ impl InsertStatement {
                 val_len: values.len(),
             });
         }
-        self.values.push(values);
+        let values_source = if let Some(InsertValueSource::Values(values)) = &mut self.source {
+            values
+        } else {
+            self.source = Some(InsertValueSource::Values(Default::default()));
+            if let Some(InsertValueSource::Values(values)) = &mut self.source {
+                values
+            } else {
+                unreachable!();
+            }
+        };
+        values_source.push(values);
         Ok(self)
     }
 

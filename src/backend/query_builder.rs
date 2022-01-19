@@ -1,3 +1,4 @@
+use crate::backend::query_builder::InsertValueSource;
 use crate::*;
 use std::ops::Deref;
 
@@ -32,24 +33,43 @@ pub trait QueryBuilder: QuotedBuilder {
         });
         write!(sql, ")").unwrap();
 
-        write!(sql, " VALUES ").unwrap();
-        insert.values.iter().fold(true, |first, row| {
-            if !first {
-                write!(sql, ", ").unwrap()
-            }
-            write!(sql, "(").unwrap();
-            row.iter().fold(true, |first, col| {
-                if !first {
-                    write!(sql, ", ").unwrap()
-                }
-                self.prepare_simple_expr(col, sql, collector);
-                false
-            });
-            write!(sql, ")").unwrap();
-            false
-        });
+        if let Some(source) = &insert.source {
+            write!(sql, " ").unwrap();
+            self.prepare_insert_value_source(source, sql, collector);
+        }
 
         self.prepare_returning(&insert.returning, sql, collector);
+    }
+
+    fn prepare_insert_value_source(
+        &self,
+        source: &InsertValueSource,
+        sql: &mut SqlWriter,
+        collector: &mut dyn FnMut(Value),
+    ) {
+        match source {
+            InsertValueSource::Values(values) => {
+                write!(sql, "VALUES ").unwrap();
+                values.iter().fold(true, |first, row| {
+                    if !first {
+                        write!(sql, ", ").unwrap()
+                    }
+                    write!(sql, "(").unwrap();
+                    row.iter().fold(true, |first, col| {
+                        if !first {
+                            write!(sql, ", ").unwrap()
+                        }
+                        self.prepare_simple_expr(col, sql, collector);
+                        false
+                    });
+                    write!(sql, ")").unwrap();
+                    false
+                });
+            }
+            InsertValueSource::Select(select_query) => {
+                self.prepare_select_statement(select_query.deref(), sql, collector);
+            }
+        }
     }
 
     /// Translate [`SelectStatement`] into SQL statement.
@@ -416,11 +436,23 @@ pub trait QueryBuilder: QuotedBuilder {
     ) {
         self.prepare_join_type(&join_expr.join, sql, collector);
         write!(sql, " ").unwrap();
-        self.prepare_table_ref(&join_expr.table, sql, collector);
+        self.prepare_join_table_ref(join_expr, sql, collector);
         if let Some(on) = &join_expr.on {
             write!(sql, " ").unwrap();
             self.prepare_join_on(on, sql, collector);
         }
+    }
+
+    fn prepare_join_table_ref(
+        &self,
+        join_expr: &JoinExpr,
+        sql: &mut SqlWriter,
+        collector: &mut dyn FnMut(Value),
+    ) {
+        if join_expr.lateral {
+            write!(sql, "LATERAL ").unwrap();
+        }
+        QueryBuilder::prepare_table_ref_common(self, &join_expr.table, sql, collector);
     }
 
     /// Translate [`TableRef`] into SQL statement.
@@ -915,6 +947,8 @@ pub trait QueryBuilder: QuotedBuilder {
             #[cfg(feature = "with-chrono")]
             Value::DateTime(None) => write!(s, "NULL").unwrap(),
             #[cfg(feature = "with-chrono")]
+            Value::DateTimeUtc(None) => write!(s, "NULL").unwrap(),
+            #[cfg(feature = "with-chrono")]
             Value::DateTimeWithTimeZone(None) => write!(s, "NULL").unwrap(),
             #[cfg(feature = "with-rust_decimal")]
             Value::Decimal(None) => write!(s, "NULL").unwrap(),
@@ -951,6 +985,10 @@ pub trait QueryBuilder: QuotedBuilder {
             #[cfg(feature = "with-chrono")]
             Value::DateTime(Some(v)) => {
                 write!(s, "\'{}\'", v.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+            }
+            #[cfg(feature = "with-chrono")]
+            Value::DateTimeUtc(Some(v)) => {
+                write!(s, "\'{}\'", v.format("%Y-%m-%d %H:%M:%S %:z").to_string()).unwrap()
             }
             #[cfg(feature = "with-chrono")]
             Value::DateTimeWithTimeZone(Some(v)) => {
