@@ -134,7 +134,7 @@ impl CommonTableExpression {
     /// Set up the columns of the CTE to match the given [SelectStatement] selected columns.
     /// This will fail if the select contains non named columns like expressions of wildcards.
     ///
-    /// Returns true if the column setup from the select query was successfull. If the returned
+    /// Returns true if the column setup from the select query was successful. If the returned
     /// value is false the columns are untouched.
     pub fn try_set_cols_from_select(&mut self, select: &SelectStatement) -> bool {
         self.try_set_cols_from_selects(&select.selects)
