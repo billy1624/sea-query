@@ -140,7 +140,7 @@ impl CommonTableExpression {
         self.try_set_cols_from_selects(&select.selects)
     }
 
-    fn try_set_cols_from_selects(&mut self, selects: &Vec<SelectExpr>) -> bool {
+    fn try_set_cols_from_selects(&mut self, selects: &[SelectExpr]) -> bool {
         let vec: Option<Vec<DynIden>> = selects
             .iter()
             .map(|select| {
@@ -221,7 +221,7 @@ impl Search {
         expr.alias.as_ref().unwrap();
         Self {
             order: Some(order),
-            expr: Some(expr.into()),
+            expr: Some(expr),
         }
     }
 

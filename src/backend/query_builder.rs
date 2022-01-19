@@ -719,7 +719,7 @@ pub trait QueryBuilder: QuotedBuilder {
             }
             cte_first = false;
 
-            self.prepare_with_query_clause_common_table(&cte, sql, collector);
+            self.prepare_with_query_clause_common_table(cte, sql, collector);
         }
     }
 
