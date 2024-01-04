@@ -27,7 +27,7 @@ env:
 jobs:
   rustfmt:
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -40,7 +40,7 @@ jobs:
 
   diesel-build:
     name: Build `sea-query-diesel`
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -60,7 +60,7 @@ jobs:
 
   sqlite:
     name: SQLite
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: diesel-build
     strategy:
       matrix:
@@ -73,7 +73,7 @@ jobs:
 
   mysql:
     name: MySQL
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: diesel-build
     strategy:
       matrix:
@@ -103,7 +103,7 @@ jobs:
 
   mariadb:
     name: MariaDB
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: diesel-build
     strategy:
       matrix:
@@ -133,7 +133,7 @@ jobs:
 
   postgres:
     name: PostgreSQL
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: diesel-build
     strategy:
       matrix:
